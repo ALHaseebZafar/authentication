@@ -36,6 +36,13 @@ const userSchema = new mongoose.Schema({
       }
     },
   },
+  googleId:
+  {
+    type:String
+  },
+  githubId:{
+    type:String
+  },
   tokens: [
     {
       token: {

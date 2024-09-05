@@ -6,6 +6,46 @@ const auth = require("../middleware/auth");
 const jwt = require("jsonwebtoken");
 const router = new express.Router();
 const crypto = require("crypto");
+const passport = require('passport');
+
+// Protected route after Google or github login
+router.get("/profile", (req, res) => {
+  if (!req.user) {
+    return res.redirect("/");
+  }
+  res.send(`Welcome ${req.user.firstname}`);
+});
+
+// Route to initiate Google Sign-In
+router.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["profile", "email"] })
+);
+
+// Google OAuth callback route
+router.get(
+  "/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: "/" }),
+  (req, res) => {
+    // Successful authentication, redirect to the profile page or generate a token
+    res.redirect("/profile"); // or use JWT for token-based login
+  }
+);
+// Route to initiate GitHub Sign-In
+router.get(
+  "/auth/github",
+  passport.authenticate("github", { scope: ["user:email"] })
+);
+
+// GitHub OAuth callback route
+router.get(
+  "/auth/github/callback",
+  passport.authenticate("github", { failureRedirect: "/" }),
+  (req, res) => {
+    // Successful authentication, redirect or generate a token
+    res.redirect("/profile"); // or use JWT for token-based login
+  }
+);
 
 router.post("/users/signup", async (req, res) => {
   const { firstname, lastname, email, password } = req.body;
