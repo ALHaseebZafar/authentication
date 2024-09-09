@@ -2,7 +2,7 @@ const express = require('express');
 require('dotenv').config();  // Load environment variables
 require('./db/mongoose');    // Connect to MongoDB
 const passport = require('passport');  // Import Passport directly
-const session = require('express-session');  // Required for session-based authentication
+// const session = require('express-session');  // Required for session-based authentication
 const userRouter = require('./routers/user');
 const bookRouter = require('./routers/books');  // Correctly import the bookRouter
 const app = express();
@@ -14,11 +14,11 @@ app.get('/',(req,res)=>{
   console.log('app is running perfectly')
 })
 // Set up session middleware before passport
-app.use(session({
-  secret: process.env.SESSION_SECRET,  // Use session secret from env file
-  resave: false,
-  saveUninitialized: true
-}));
+// app.use(session({
+//   secret: process.env.SESSION_SECRET,  // Use session secret from env file
+//   resave: false,
+//   saveUninitialized: true
+// }));
 
 // Initialize passport middleware
 app.use(passport.initialize());
