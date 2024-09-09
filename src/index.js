@@ -24,7 +24,7 @@ app.use(session({
 }));
 
 //Initialize passport middleware
-// app.use(passport.initialize());
+app.use(passport.initialize());
 // app.use(passport.session());
 
 Routers

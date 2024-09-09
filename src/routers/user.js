@@ -113,16 +113,14 @@ router.post("/users/verify-otp", async (req, res) => {
 
 router.post("/users/login", async (req, res) => {
   try {
-    const user = await User.findByCredentials(
-      req.body.email,
-      req.body.password
-    );
-    const token = await user.generateAuthToken();
+    const user = await User.findByCredentials(req.body.email, req.body.password);
+    const token = jwt.sign({ _id: user._id.toString() }, process.env.JWT_SECRET, { expiresIn: '1h' }); // Add a secret key to .env
     res.send({ user, token });
   } catch (e) {
-    res.status(400).send();
+    res.status(400).send("Invalid login credentials");
   }
 });
+
 
 router.post("/users/request-reset-password", async (req, res) => {
   try {
