@@ -20,7 +20,12 @@ app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
-  store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }) // Store sessions in MongoDB
+  store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }), // Store sessions in MongoDB
+  cookie: {
+    secure: true, // required for cookies to work on HTTPS
+    httpOnly: false,
+    sameSite: 'none'
+  }
 }));
 
 //Initialize passport middleware
