@@ -13,6 +13,11 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  cellno: {
+    type: Number,
+    required: true,
+    trim: true,
+  },
   email: {
     type: String,
     unique: true,
@@ -36,12 +41,22 @@ const userSchema = new mongoose.Schema({
       }
     },
   },
-  googleId:
-  {
-    type:String
+  confirmpassword: {
+    type: String,
+    required: true,
+    minlength: 7,
+    trim: true,
+    validate(value) {
+      if (value.toLowerCase().includes("password")) {
+        throw new Error('Password cannot contain "password"');
+      }
+    },
   },
-  githubId:{
-    type:String
+  googleId: {
+    type: String,
+  },
+  githubId: {
+    type: String,
   },
   tokens: [
     {

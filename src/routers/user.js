@@ -2,11 +2,10 @@ const express = require("express");
 const User = require("../models/user");
 const transporter = require("../utils/emailService");
 const OTP = require("../models/otp");
-const auth = require("../middleware/auth");
 const jwt = require("jsonwebtoken");
 const router = new express.Router();
 const crypto = require("crypto");
-const passport = require('passport');
+const passport = require("passport");
 
 // Protected route after Google or github login
 router.get("/profile", (req, res) => {
@@ -48,11 +47,19 @@ router.get(
 );
 
 router.post("/users/signup", async (req, res) => {
-  const { firstname, lastname, email, password } = req.body;
+  const { firstname, lastname, cellno, email, password, confirmpassword } =
+    req.body;
 
   try {
     // Create a new user
-    const user = new User({ firstname, lastname, email, password });
+    const user = new User({
+      firstname,
+      lastname,
+      email,
+      password,
+      cellno,
+      confirmpassword,
+    });
     await user.save();
 
     // Generate OTP
@@ -151,38 +158,43 @@ router.post("/users/request-reset-password", async (req, res) => {
   }
 });
 
-// Route to handle password reset
 router.post("/users/reset-password", async (req, res) => {
   try {
-    const resetToken = req.body.token;
-    const newPassword = req.body.password;
+    const { token, password, confirmpassword } = req.body;
 
-    if (!resetToken || !newPassword) {
+    // Validate input fields
+    if (!token || !password || !confirmpassword) {
       return res
         .status(400)
-        .send({ error: "Token and new password are required." });
+        .send("Token, new password, and confirm password are required.");
+    }
+
+    // Check if passwords match
+    if (password !== confirmpassword) {
+      return res.status(400).send("Passwords do not match.");
     }
 
     // Verify token
-    const decoded = jwt.verify(resetToken, "authen");
+    const decoded = jwt.verify(token, "authen");
 
-    const user = await User.findOne({ _id: decoded._id, resetToken });
+    // Find the user with the matching token
+    const user = await User.findOne({ _id: decoded._id, resetToken: token });
 
     if (!user) {
-      return res.status(404).send({ error: "Invalid or expired token." });
+      return res.status(404).send("Invalid or expired token.");
     }
 
     // Update user's password
-    user.password = newPassword; // Ensure you hash the password in a production setting
+    user.password = password; // Ensure you hash the password in a production setting
     user.resetToken = undefined; // Clear the reset token after use
     await user.save();
 
-    res.send({ message: "Password reset successfully." });
+    res.send("Password reset successfully.");
   } catch (e) {
-    res
-      .status(500)
-      .send({ error: "An error occurred while resetting the password." });
+    console.error(e);
+    res.status(500).send("An error occurred while resetting the password.");
   }
 });
 
 module.exports = router;
+
