@@ -9,10 +9,6 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
-app.get('/',(req,res)=>{
-  console.log('hello world from the backend');
-  
-})
 
 // Set up session middleware before passport
 app.use(session({
