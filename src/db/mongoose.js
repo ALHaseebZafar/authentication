@@ -4,10 +4,7 @@ require("dotenv").config(); // Load environment variables
 const mongoURI = process.env.MONGO_URI;
 
 mongoose
-  .connect(mongoURI, {
-    useNewUrlParser: true,
-    // useUnifiedTopology: true // Uncomment this if needed
-  })
+  .connect(mongoURI)
   .then(() => {
     console.log("Database connected successfully");
   })
