@@ -10,7 +10,7 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 app.get('/',(req,res)=>{
-  res.json(message:'hello world from the backend');
+  console.log('hello world from the backend');
   
 })
 
