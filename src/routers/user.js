@@ -167,6 +167,7 @@ router.post("/users/login", async (req, res) => {
     const user = await User.findByCredentials(req.body.email, req.body.password);
     const token = jwt.sign({ _id: user._id.toString() }, process.env.JWT_SECRET, { expiresIn: '1h' }); // Add a secret key to .env
     res.send({ user, token });
+    console.log('user login successfully')
   } catch (e) {
     res.status(400).send("Invalid login credentials");
   }
