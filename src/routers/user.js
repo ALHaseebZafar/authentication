@@ -6,6 +6,8 @@ const jwt = require("jsonwebtoken");
 const router = new express.Router();
 const crypto = require("crypto");
 const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const GitHubStrategy = require("passport-github").Strategy;
 
 // Protected route after Google or github login
 router.get("/profile", (req, res) => {
@@ -14,6 +16,55 @@ router.get("/profile", (req, res) => {
   }
   res.send(`Welcome ${req.user.firstname}`);
 });
+// Google Strategy configuration
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: "/auth/google/callback"
+},
+async (accessToken, refreshToken, profile, done) => {
+  try {
+    // Find or create a user in your database
+    let user = await User.findOne({ googleId: profile.id });
+    if (!user) {
+      user = await User.create({
+        googleId: profile.id,
+        firstname: profile.name.givenName,
+        lastname: profile.name.familyName,
+        email: profile.emails[0].value,
+      });
+    }
+    done(null, user);
+  } catch (error) {
+    done(error, null);
+  }
+}
+))
+
+// GitHub Strategy configuration
+passport.use(new GitHubStrategy({
+  clientID: process.env.GITHUB_CLIENT_ID,
+  clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  callbackURL: "/auth/github/callback"
+},
+async (accessToken, refreshToken, profile, done) => {
+  try {
+    // Find or create a user in your database
+    let user = await User.findOne({ githubId: profile.id });
+    if (!user) {
+      user = await User.create({
+        githubId: profile.id,
+        firstname: profile.displayName || profile.username,
+        email: profile.emails[0].value,
+      });
+    }
+    done(null, user);
+  } catch (error) {
+    done(error, null);
+  }
+}
+));
+
 
 // Route to initiate Google Sign-In
 router.get(
