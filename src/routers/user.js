@@ -8,63 +8,116 @@ const crypto = require("crypto");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const GitHubStrategy = require("passport-github").Strategy;
+const FacebookStrategy = require("passport-facebook").Strategy;
+
 
 // Protected route after Google or github login
-router.get("/profile", (req, res) => {
-  if (!req.user) {
+router.get("/profile", async (req, res) => {
+  const token = req.query.token;
+  if (!token) {
     return res.redirect("/");
   }
-  res.send(`Welcome ${req.user.firstname}`);
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded._id);
+    if (!user) {
+      return res.redirect("/");
+    }
+    res.send(`Welcome ${user.firstname}`);
+  } catch (e) {
+    res.status(500).send("Invalid token.");
+  }
 });
 // Google Strategy configuration
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: "/auth/google/callback"
-},
-async (accessToken, refreshToken, profile, done) => {
-  try {
-    // Find or create a user in your database
-    let user = await User.findOne({ googleId: profile.id });
-    if (!user) {
-      user = await User.create({
-        googleId: profile.id,
-        firstname: profile.name.givenName,
-        lastname: profile.name.familyName,
-        email: profile.emails[0].value,
-      });
-    }
-    done(null, user);
-  } catch (error) {
-    done(error, null);
-  }
-}
-))
 
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: "/auth/google/callback",
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        // Find or create a user in your database
+        let user = await User.findOne({ googleId: profile.id });
+        if (!user) {
+          user = await User.create({
+            googleId: profile.id,
+            firstname: profile.name.givenName,
+            lastname: profile.name.familyName,
+            email: profile.emails[0].value,
+          });
+        }
+        done(null, user);
+      } catch (error) {
+        done(error, null);
+      }
+    }
+  )
+);
+// Facebook Strategy configuration
+passport.use(
+  new FacebookStrategy(
+    {
+      clientID: process.env.FACEBOOK_CLIENT_ID,
+      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+      callbackURL: "/auth/facebook/callback",
+      profileFields: ["id", "emails", "name"], // Request fields from Facebook profile
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        let user = await User.findOne({ facebookId: profile.id });
+
+        if (!user) {
+          user = new User({
+            facebookId: profile.id,
+            firstname: profile.name.givenName || 'FacebookUser',
+            lastname: profile.name.familyName || '',
+            email: profile.emails && profile.emails[0] ? profile.emails[0].value : null, // Handle missing email
+            password: crypto.randomBytes(20).toString('hex'), // Generate random password for OAuth
+            confirmpassword: crypto.randomBytes(20).toString('hex'),
+          });
+          await user.save();
+        }
+        done(null, user);
+      } catch (error) {
+        done(error, null);
+      }
+    }
+  )
+);
 // GitHub Strategy configuration
-passport.use(new GitHubStrategy({
-  clientID: process.env.GITHUB_CLIENT_ID,
-  clientSecret: process.env.GITHUB_CLIENT_SECRET,
-  callbackURL: "/auth/github/callback"
-},
-async (accessToken, refreshToken, profile, done) => {
-  try {
-    // Find or create a user in your database
-    let user = await User.findOne({ githubId: profile.id });
-    if (!user) {
-      user = await User.create({
-        githubId: profile.id,
-        firstname: profile.displayName || profile.username,
-        email: profile.emails[0].value,
-      });
-    }
-    done(null, user);
-  } catch (error) {
-    done(error, null);
-  }
-}
-));
+passport.use(
+  new GitHubStrategy(
+    {
+      clientID: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      callbackURL: "/auth/github/callback",
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        let user = await User.findOne({ githubId: profile.id });
 
+        if (!user) {
+          user = new User({
+            githubId: profile.id,
+            firstname: profile.displayName || profile.username || 'GitHubUser',
+            lastname: '',
+            email: profile.emails && profile.emails[0] ? profile.emails[0].value : null, // GitHub might not return an email
+            password: crypto.randomBytes(20).toString('hex'), // Generate random password for OAuth
+            confirmpassword: crypto.randomBytes(20).toString('hex'),
+          });
+          await user.save();
+        }
+        done(null, user);
+      } catch (error) {
+        done(error, null);
+      }
+    }
+  )
+);
 
 // Route to initiate Google Sign-In
 router.get(
@@ -76,11 +129,36 @@ router.get(
 router.get(
   "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/" }),
-  (req, res) => {
-    // Successful authentication, redirect to the profile page or generate a token
-    res.redirect("/profile"); // or use JWT for token-based login
+  async (req, res) => {
+    try {
+      const token = await req.user.generateAuthToken();
+      res.send({ user: req.user, token });
+    } catch (e) {
+      res.status(500).send("Error generating token.");
+    }
+  }
+)
+
+router.get(
+  "/auth/facebook",
+  passport.authenticate("facebook", { scope: ["email"] })
+);
+
+// Facebook OAuth callback route
+router.get(
+  "/auth/facebook/callback",
+  passport.authenticate("facebook", { failureRedirect: "/" }),
+  async (req, res) => {
+    try {
+      const token = await req.user.generateAuthToken();
+      res.send({ user: req.user, token });
+    } catch (e) {
+      res.status(500).send("Error generating token.");
+    }
   }
 );
+
+
 // Route to initiate GitHub Sign-In
 router.get(
   "/auth/github",
@@ -91,14 +169,19 @@ router.get(
 router.get(
   "/auth/github/callback",
   passport.authenticate("github", { failureRedirect: "/" }),
-  (req, res) => {
-    // Successful authentication, redirect or generate a token
-    res.redirect("/profile"); // or use JWT for token-based login
+  async (req, res) => {
+    try {
+      const token = await req.user.generateAuthToken();
+      res.send({ user: req.user, token });
+    } catch (e) {
+      res.status(500).send("Error generating token.");
+    }
   }
 );
 
+
 router.post("/users/signup", async (req, res) => {
-  const { firstname, lastname, cellno, email, password, confirmpassword } =
+  const { firstname, lastname,cellno, email, password, confirmpassword } =
     req.body;
 
   try {
@@ -106,9 +189,9 @@ router.post("/users/signup", async (req, res) => {
     const user = new User({
       firstname,
       lastname,
+      cellno,
       email,
       password,
-      cellno,
       confirmpassword,
     });
     await user.save();
@@ -164,15 +247,21 @@ router.post("/users/verify-otp", async (req, res) => {
 
 router.post("/users/login", async (req, res) => {
   try {
-    const user = await User.findByCredentials(req.body.email, req.body.password);
-    const token = jwt.sign({ _id: user._id.toString() }, process.env.JWT_SECRET, { expiresIn: '1h' }); // Add a secret key to .env
+    const user = await User.findByCredentials(
+      req.body.email,
+      req.body.password
+    );
+    const token = jwt.sign(
+      { _id: user._id.toString() },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    ); // Add a secret key to .env
     res.send({ user, token });
-    console.log('user login successfully')
+    console.log("user login successfully");
   } catch (e) {
     res.status(400).send("Invalid login credentials");
   }
 });
-
 
 router.post("/users/request-reset-password", async (req, res) => {
   try {
@@ -247,4 +336,3 @@ router.post("/users/reset-password", async (req, res) => {
 });
 
 module.exports = router;
-
