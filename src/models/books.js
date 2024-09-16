@@ -23,7 +23,7 @@ const bookSchema = new mongoose.Schema({
   },
   owner: {
     type: mongoose.Schema.Types.ObjectId, // Reference to the user who created the book
-    required: true,
+    // required: true,
     ref: 'User' // Referencing the User model
   }
 });

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OAuth Authentication</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f0f0f0;
+    }
+
+    .auth-container {
+      text-align: center;
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .auth-container h1 {
+      margin-bottom: 20px;
+    }
+
+    .auth-button {
+      display: block;
+      width: 200px;
+      padding: 10px;
+      margin: 10px auto;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .google {
+      background-color: #db4437;
+      color: white;
+    }
+
+    .github {
+      background-color: #333;
+      color: white;
+    }
+
+    .facebook {
+      background-color: #3b5998;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="auth-container">
+    <h1>Login with OAuth</h1>
+
+    <a href="/auth/google">
+      <button class="auth-button google">Login with Google</button>
+    </a>
+
+    <a href="/auth/github">
+      <button class="auth-button github">Login with GitHub</button>
+    </a>
+
+    <a href="/auth/facebook">
+      <button class="auth-button facebook">Login with Facebook</button>
+    </a>
+  </div>
+
+</body>
+</html>

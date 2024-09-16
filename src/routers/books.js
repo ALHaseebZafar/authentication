@@ -3,36 +3,34 @@ const Book = require("../models/books");
 const auth = require("../middleware/auth");
 const router = new express.Router();
 
-// Creating a book
-router.post("/books", auth, async (req, res) => {
+router.post('/books', auth, async (req, res) => {
   const { title, description, author, publishdate } = req.body;
 
   // Check for required fields
   if (!title || !description || !author || !publishdate) {
-    return res
-      .status(400)
-      .json({
-        error:
-          "All fields (title, description, author, publishdate) are required.",
-      });
+    return res.status(400).json({
+      error: "All fields (title, description, author, publishdate) are required.",
+    });
   }
+
+  // Debugging logs
+  console.log('User ID:', req.user.id);
+  console.log('Request Body:', req.body);
 
   const book = new Book({
     ...req.body,
-    owner: req.user.id,
+    owner: req.user.id, // Ensure the owner field is set to the authenticated user ID
   });
 
   try {
     await book.save();
     res.status(201).json(book);
   } catch (e) {
-    if (e.name === "ValidationError") {
+    console.error('Book Creation Error:', e); // Log the error
+    if (e.name === 'ValidationError') {
       return res.status(400).json({ error: e.message });
     }
-    console.error(e);
-    res
-      .status(500)
-      .json({ error: "An error occurred while creating the book." });
+    res.status(500).json({ error: "An error occurred while creating the book." });
   }
 });
 

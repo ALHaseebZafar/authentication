@@ -6,205 +6,194 @@ const jwt = require("jsonwebtoken");
 const router = new express.Router();
 const crypto = require("crypto");
 const passport = require("passport");
-const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const GoogleStrategy = require("passport-google-oauth2").Strategy;
 const GitHubStrategy = require("passport-github").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
+const auth=require('../middleware/auth')
+require("dotenv").config();
 
-
-// Protected route after Google or github login
-router.get("/profile", async (req, res) => {
-  const token = req.query.token;
-  if (!token) {
-    return res.redirect("/");
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded._id);
-    if (!user) {
-      return res.redirect("/");
-    }
-    res.send(`Welcome ${user.firstname}`);
-  } catch (e) {
-    res.status(500).send("Invalid token.");
-  }
-});
-// Google Strategy configuration
-
+function isLoggedIn(req, res, next) {
+  req.user ? next() : res.sendStatus(401);
+}
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "/auth/google/callback",
+      callbackURL: "http://localhost:3000/auth/google/callback",
+      passReqToCallback: true,
     },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        // Find or create a user in your database
-        let user = await User.findOne({ googleId: profile.id });
-        if (!user) {
-          user = await User.create({
-            googleId: profile.id,
-            firstname: profile.name.givenName,
-            lastname: profile.name.familyName,
-            email: profile.emails[0].value,
-          });
-        }
-        done(null, user);
-      } catch (error) {
-        done(error, null);
-      }
-    }
-  )
-);
-// Facebook Strategy configuration
-passport.use(
-  new FacebookStrategy(
-    {
-      clientID: process.env.FACEBOOK_CLIENT_ID,
-      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
-      callbackURL: "/auth/facebook/callback",
-      profileFields: ["id", "emails", "name"], // Request fields from Facebook profile
-    },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        let user = await User.findOne({ facebookId: profile.id });
+    function (request, accessToken, refreshToken, profile, done) {
+      // Generate a JWT
+      const token = jwt.sign(
+        { _id: profile.id, email: profile.email },
+        process.env.JWT_SECRET,
+        { expiresIn: "2h" }
+      );
 
-        if (!user) {
-          user = new User({
-            facebookId: profile.id,
-            firstname: profile.name.givenName || 'FacebookUser',
-            lastname: profile.name.familyName || '',
-            email: profile.emails && profile.emails[0] ? profile.emails[0].value : null, // Handle missing email
-            password: crypto.randomBytes(20).toString('hex'), // Generate random password for OAuth
-            confirmpassword: crypto.randomBytes(20).toString('hex'),
-          });
-          await user.save();
-        }
-        done(null, user);
-      } catch (error) {
-        done(error, null);
-      }
+      // Extract only the required information
+      const userData = {
+        name: profile.displayName,
+        email: profile.email,
+        token: token
+      };
+
+      done(null, userData);
     }
   )
 );
-// GitHub Strategy configuration
+
+
 passport.use(
   new GitHubStrategy(
     {
       clientID: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      callbackURL: "/auth/github/callback",
+      callbackURL: "http://localhost:3000/auth/github/callback",
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async function (accessToken, refreshToken, profile, done) {
       try {
-        let user = await User.findOne({ githubId: profile.id });
+        const emailsResponse = await fetch("https://api.github.com/user/emails", {
+          headers: {
+            Authorization: `token ${accessToken}`,
+            "User-Agent": "Node.js",
+          },
+        });
+        const emailData = await emailsResponse.json();
 
-        if (!user) {
-          user = new User({
-            githubId: profile.id,
-            firstname: profile.displayName || profile.username || 'GitHubUser',
-            lastname: '',
-            email: profile.emails && profile.emails[0] ? profile.emails[0].value : null, // GitHub might not return an email
-            password: crypto.randomBytes(20).toString('hex'), // Generate random password for OAuth
-            confirmpassword: crypto.randomBytes(20).toString('hex'),
-          });
-          await user.save();
-        }
-        done(null, user);
-      } catch (error) {
-        done(error, null);
+        console.log("GitHub Email Data:", emailData); // Log the email data
+
+        // Find the primary email from the list
+        const primaryEmail = emailData.find(
+          (email) => email.primary && email.verified
+        );
+
+        // Attach the email to the profile
+        profile.email = primaryEmail ? primaryEmail.email : null;
+        profile.accessToken = accessToken;
+
+        // Generate a JWT
+        const token = jwt.sign(
+          { _id: profile.id, email: profile.email },
+          process.env.JWT_SECRET,
+          { expiresIn: "2h" }
+        );
+        done(null, { profile, token });
+      } catch (err) {
+        done(err, null);
       }
     }
   )
 );
 
-// Route to initiate Google Sign-In
-router.get(
-  "/auth/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
+passport.use(
+  new FacebookStrategy(
+    {
+      clientID: process.env.FACEBOOK_APP_ID,
+      clientSecret: process.env.FACEBOOK_APP_SECRET,
+      callbackURL: "http://localhost:3000/auth/facebook/callback",
+      profileFields: ["id", "emails", "name"],
+    },
+    function (accessToken, refreshToken, profile, done) {
+      console.log("Facebook Profile:", profile); // Log the profile object
+
+      const email = profile.emails ? profile.emails[0].value : null;
+      const name = profile.displayName; // Get the display name
+
+      // Generate a JWT
+      const token = jwt.sign(
+        { _id: profile.id, email: email },
+        process.env.JWT_SECRET,
+        { expiresIn: "2h" }
+      );
+      done(null, { name, email, token });
+    }
+  )
 );
 
-// Google OAuth callback route
+router.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["email", "profile"] })
+);
+
 router.get(
   "/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
-  async (req, res) => {
-    try {
-      const token = await req.user.generateAuthToken();
-      res.send({ user: req.user, token });
-    } catch (e) {
-      res.status(500).send("Error generating token.");
+  passport.authenticate("google", { session: false }),
+  (req, res) => {
+    if (req.user) {
+      const { name, email, token } = req.user;
+      res.send(`Name: ${name}, Email: ${email}, AccessToken: ${token}`);
+    } else {
+      res.redirect("/auth/failure"); // Redirect to failure route if authentication fails
     }
   }
-)
+);
+
+
+router.get(
+  "/auth/github",
+  passport.authenticate("github", { scope: ["user:email"] }) // Correct scope for GitHub
+);
+
+router.get(
+  "/auth/github/callback",
+  passport.authenticate("github", { session: false }),
+  (req, res) => {
+    if (req.user) {
+      const { profile, token } = req.user;
+      const email = profile.email || "No email found";
+      res.send(`Email: ${email}, AccessToken: ${token}`);
+    } else {
+      res.redirect("/auth/failure");
+    }
+  }
+);
 
 router.get(
   "/auth/facebook",
-  passport.authenticate("facebook", { scope: ["email"] })
+  passport.authenticate("facebook", { scope: ["email"] }) // No 'profile' scope for Facebook
 );
 
-// Facebook OAuth callback route
 router.get(
   "/auth/facebook/callback",
-  passport.authenticate("facebook", { failureRedirect: "/" }),
-  async (req, res) => {
-    try {
-      const token = await req.user.generateAuthToken();
-      res.send({ user: req.user, token });
-    } catch (e) {
-      res.status(500).send("Error generating token.");
+  passport.authenticate("facebook", { session: false }),
+  (req, res) => {
+    if (req.user) {
+      const { email, token } = req.user;
+      res.send(` Email: ${email || 'No email available'}, AccessToken: ${token}`);
+    } else {
+      res.redirect("/auth/failure");
     }
   }
 );
 
+router.get("/auth/failure", (req, res) => {
+  res.send("something went wrong");
+});
 
-// Route to initiate GitHub Sign-In
-router.get(
-  "/auth/github",
-  passport.authenticate("github", { scope: ["user:email"] })
-);
-
-// GitHub OAuth callback route
-router.get(
-  "/auth/github/callback",
-  passport.authenticate("github", { failureRedirect: "/" }),
-  async (req, res) => {
-    try {
-      const token = await req.user.generateAuthToken();
-      res.send({ user: req.user, token });
-    } catch (e) {
-      res.status(500).send("Error generating token.");
-    }
-  }
-);
 
 
 router.post("/users/signup", async (req, res) => {
-  const { firstname, lastname,cellno, email, password, confirmpassword } =
+  const { firstname, lastname, cellno, email, password, confirmpassword } =
     req.body;
 
   try {
-    // Create a new user
     const user = new User({
       firstname,
       lastname,
-      cellno,
       email,
       password,
+      cellno,
       confirmpassword,
     });
     await user.save();
 
-    // Generate OTP
-    const otp = crypto.randomInt(100000, 999999).toString(); // 6-digit OTP
-    const expiresAt = Date.now() + 10 * 60 * 1000; // OTP valid for 10 minutes
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
 
-    // Save OTP to database
     const otpEntry = new OTP({ email, otp, expiresAt });
     await otpEntry.save();
 
-    // Send OTP to user’s email
     const resetUrl = `http://localhost:3000/verify-otp?otp=${otp}`;
     const mailOptions = {
       from: "noreply@example.com",
@@ -227,7 +216,6 @@ router.post("/users/verify-otp", async (req, res) => {
 
   try {
     const otpEntry = await OTP.findOne({ email, otp });
-
     if (!otpEntry) {
       return res.status(400).send({ error: "Invalid OTP." });
     }
@@ -236,9 +224,7 @@ router.post("/users/verify-otp", async (req, res) => {
       return res.status(400).send({ error: "OTP expired." });
     }
 
-    // Optionally, you can delete the OTP entry after successful verification
     await OTP.deleteOne({ _id: otpEntry._id });
-
     res.send({ message: "OTP verified successfully. You can now log in." });
   } catch (e) {
     res.status(500).send({ error: "An error occurred while verifying OTP." });
@@ -251,81 +237,73 @@ router.post("/users/login", async (req, res) => {
       req.body.email,
       req.body.password
     );
+    console.log("process", process.env.JWT_SECRET);
+    console.log("user", user);
     const token = jwt.sign(
       { _id: user._id.toString() },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
-    ); // Add a secret key to .env
+      { expiresIn: "2h" }
+    );
     res.send({ user, token });
     console.log("user login successfully");
   } catch (e) {
+    console.log("error", e);
     res.status(400).send("Invalid login credentials");
   }
 });
-
+// forget password
 router.post("/users/request-reset-password", async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.email });
     if (!user) {
-      return res.status(404).send({ error: "user not found" });
+      return res.status(404).send({ error: "User not found" });
     }
-    // Generate a reset token (this can also be a JWT)
+
     const resetToken = jwt.sign({ _id: user._id.toString() }, "authen", {
       expiresIn: "1h",
     });
-
-    // Add token to user document or separate collection if needed
-    user.resetToken = resetToken; // Make sure to add 'resetToken' field to user schema
+    user.resetToken = resetToken;
     await user.save();
 
-    // Send email with reset link
     const resetUrl = `http://localhost:3000/reset-password?token=${resetToken}`;
     const mailOptions = {
-      from: "noreply@example.com", // Replace with your email address
+      from: "noreply@example.com",
       to: user.email,
       subject: "Password Reset Request",
       text: `You requested a password reset. Click the link to reset your password: ${resetUrl}`,
     };
-
     await transporter.sendMail(mailOptions);
 
-    res.send({ message: "Password reset email sent." });
+    // res.send({ message: "Password reset email sent." });
+    res.send({ resetToken: resetToken, message: "Password reset email sent." }); //get token in frontEnd forget component
   } catch (e) {
     res
       .status(500)
       .send({ error: "An error occurred while requesting a password reset." });
   }
 });
-
+// reset password
 router.post("/users/reset-password", async (req, res) => {
   try {
     const { token, password, confirmpassword } = req.body;
-
-    // Validate input fields
     if (!token || !password || !confirmpassword) {
       return res
         .status(400)
         .send("Token, new password, and confirm password are required.");
     }
 
-    // Check if passwords match
     if (password !== confirmpassword) {
       return res.status(400).send("Passwords do not match.");
     }
 
-    // Verify token
     const decoded = jwt.verify(token, "authen");
-
-    // Find the user with the matching token
     const user = await User.findOne({ _id: decoded._id, resetToken: token });
-
     if (!user) {
       return res.status(404).send("Invalid or expired token.");
     }
 
-    // Update user's password
-    user.password = password; // Ensure you hash the password in a production setting
-    user.resetToken = undefined; // Clear the reset token after use
+    user.password = password;
+    user.resetToken = undefined;
     await user.save();
 
     res.send("Password reset successfully.");
