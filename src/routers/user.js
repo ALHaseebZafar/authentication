@@ -9,7 +9,6 @@ const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth2").Strategy;
 const GitHubStrategy = require("passport-github").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
-const auth=require('../middleware/auth')
 require("dotenv").config();
 
 function isLoggedIn(req, res, next) {
@@ -35,14 +34,13 @@ passport.use(
       const userData = {
         name: profile.displayName,
         email: profile.email,
-        token: token
+        token: token,
       };
 
       done(null, userData);
     }
   )
 );
-
 
 passport.use(
   new GitHubStrategy(
@@ -53,12 +51,15 @@ passport.use(
     },
     async function (accessToken, refreshToken, profile, done) {
       try {
-        const emailsResponse = await fetch("https://api.github.com/user/emails", {
-          headers: {
-            Authorization: `token ${accessToken}`,
-            "User-Agent": "Node.js",
-          },
-        });
+        const emailsResponse = await fetch(
+          "https://api.github.com/user/emails",
+          {
+            headers: {
+              Authorization: `token ${accessToken}`,
+              "User-Agent": "Node.js",
+            },
+          }
+        );
         const emailData = await emailsResponse.json();
 
         console.log("GitHub Email Data:", emailData); // Log the email data
@@ -129,7 +130,6 @@ router.get(
   }
 );
 
-
 router.get(
   "/auth/github",
   passport.authenticate("github", { scope: ["user:email"] }) // Correct scope for GitHub
@@ -160,7 +160,9 @@ router.get(
   (req, res) => {
     if (req.user) {
       const { email, token } = req.user;
-      res.send(` Email: ${email || 'No email available'}, AccessToken: ${token}`);
+      res.send(
+        ` Email: ${email || "No email available"}, AccessToken: ${token}`
+      );
     } else {
       res.redirect("/auth/failure");
     }
@@ -170,8 +172,6 @@ router.get(
 router.get("/auth/failure", (req, res) => {
   res.send("something went wrong");
 });
-
-
 
 router.post("/users/signup", async (req, res) => {
   const { firstname, lastname, cellno, email, password, confirmpassword } =

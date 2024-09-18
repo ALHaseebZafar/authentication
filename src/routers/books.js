@@ -79,20 +79,17 @@ router.delete("/books/:id", auth, async (req, res) => {
   const _id = req.params.id;
 
   try {
-    const book = await Book.findOneAndDelete({ _id, owner: req.user._id });
+    const book = await Book.findOneAndDelete({ _id, owner:req.user._id });
 
     if (!book) {
-      return res
-        .status(404)
-        .json({ error: "Book not found or not authorized." });
+      res.status(404).send();
     }
 
-    res.status(200).json({ message: "Book deleted successfully." });
+    res.status(200).send({ message: "Book deleted successfully.", book });
   } catch (e) {
-    console.error(e);
     res
       .status(500)
-      .json({ error: "An error occurred while deleting the book." });
+
   }
 });
 
